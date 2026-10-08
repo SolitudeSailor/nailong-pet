@@ -15,7 +15,7 @@ from desktop_services import (Audio, autostart_enabled, load_settings, monitors,
                               place_in_monitor, save_settings, set_autostart, start_tray)
 
 
-DEFAULT_VIDEO = "2026-08-19 23-00-50_tomatttooo_奶龙大笑_video.mp4"
+DEFAULT_VIDEO = "奶龙大笑_video.mp4"
 TRANSPARENT_COLOR = "#ff00ff"
 SIDE_EYE_SECONDS = 1.7
 FULL_ANIMATION_SECONDS = 8

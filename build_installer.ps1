@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $ProjectDir = $PSScriptRoot
 $Python = Join-Path $ProjectDir '.venv\Scripts\python.exe'
 $BuildDir = Join-Path $ProjectDir 'build'
-$Video = Join-Path $ProjectDir '2026-08-19 23-00-50_tomatttooo_奶龙大笑_video.mp4'
+$Video = Join-Path $ProjectDir '奶龙大笑_video.mp4'
 $Icon = Join-Path $ProjectDir 'assets\nailong.ico'
 $InnoCompiler = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
 

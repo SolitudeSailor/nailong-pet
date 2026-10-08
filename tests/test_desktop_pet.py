@@ -110,6 +110,12 @@ class PetInteractions(unittest.TestCase):
 
 
 class MonitorTests(unittest.TestCase):
+    def test_compiled_autostart_points_to_installed_executable(self):
+        installed = r'C:\Users\Tester\AppData\Local\Programs\nailong\nailong.exe'
+        with patch.object(services, 'IS_COMPILED', True), \
+                patch.object(services.sys, 'executable', installed):
+            self.assertEqual(services.autostart_command(), f'"{installed}"')
+
     def test_opaque_magenta_is_not_confused_with_transparent_colorkey(self):
         image = Image.new('RGBA', (2, 1))
         image.putdata(((255, 0, 255, 255), (0, 0, 0, 0)))

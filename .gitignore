@@ -5,3 +5,5 @@ desktop_pet_error.log
 settings.json
 settings.tmp
 .cache/
+build/
+installer/

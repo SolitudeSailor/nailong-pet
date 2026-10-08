@@ -27,6 +27,17 @@
 动画播放结束后会自动回到第一帧。
 如果启动失败，项目目录中会生成 `desktop_pet_error.log`。
 
+## 构建安装程序
+
+在已安装 PyInstaller 和 Inno Setup 6 的 Windows 64 位环境中运行：
+
+```powershell
+.\build_installer.ps1
+```
+
+安装包会输出到 `installer` 目录。安装后的配置和音频缓存保存在
+`%LOCALAPPDATA%\nailong`，卸载时会一并清理。
+
 ## 可选参数
 
 ```powershell

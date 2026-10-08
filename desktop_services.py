@@ -4,13 +4,19 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import json
+import os
 from pathlib import Path
 import queue
 import subprocess
+import sys
 import threading
 
 PROJECT = Path(__file__).resolve().parent
-SETTINGS_PATH = PROJECT / 'settings.json'
+IS_COMPILED = '__compiled__' in globals() or bool(getattr(sys, 'frozen', False))
+DATA_ROOT = (Path(os.environ['LOCALAPPDATA']) / 'nailong'
+             if IS_COMPILED and os.environ.get('LOCALAPPDATA') else PROJECT)
+SETTINGS_PATH = DATA_ROOT / 'settings.json'
+CACHE_PATH = DATA_ROOT / '.cache'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 RUN_NAME = 'NailongDesktopPet'
 
@@ -24,6 +30,7 @@ def load_settings() -> dict:
 
 
 def save_settings(value: dict) -> None:
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = SETTINGS_PATH.with_suffix('.tmp')
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary.replace(SETTINGS_PATH)
@@ -86,6 +93,8 @@ def autostart_enabled() -> bool:
 
 
 def autostart_command() -> str:
+    if IS_COMPILED:
+        return f'"{Path(sys.executable).resolve()}"'
     executable = PROJECT / '.venv' / 'Scripts' / 'pythonw.exe'
     return f'"{executable}" "{PROJECT / "launcher.pyw"}"'
 
@@ -115,8 +124,8 @@ class Audio:
         try:
             import imageio_ffmpeg
             import pygame
-            cache = PROJECT / '.cache'
-            cache.mkdir(exist_ok=True)
+            cache = CACHE_PATH
+            cache.mkdir(parents=True, exist_ok=True)
             target = cache / 'original-8s.wav'
             signature = f'{video.resolve()}:{video.stat().st_mtime_ns}:{video.stat().st_size}'
             stamp = cache / 'audio-source.txt'

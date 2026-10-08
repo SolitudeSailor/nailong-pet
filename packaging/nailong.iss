@@ -1,7 +1,7 @@
-#define MyAppName "nailong"
+#define MyAppName "奶龙桌宠"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "SolitudeSailor"
-#define MyAppExeName "nailong.exe"
+#define MyAppExeName "奶龙桌宠.exe"
 
 [Setup]
 AppId={{A96E19A8-988E-4AF7-AAB0-58B492627F78}
@@ -14,7 +14,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\installer
-OutputBaseFilename=nailong-setup-{#MyAppVersion}-x64
+OutputBaseFilename=奶龙桌宠-安装程序-{#MyAppVersion}-x64
 SetupIconFile=..\assets\nailong.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 WizardStyle=modern
@@ -30,7 +30,7 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\build\nailong\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\奶龙桌宠\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

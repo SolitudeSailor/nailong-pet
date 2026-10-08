@@ -1,4 +1,5 @@
 opencv-python-headless==4.11.0.86
+numpy>=1.26,<3
 Pillow==11.3.0
 pystray==0.19.5
 pygame-ce>=2.5,<3

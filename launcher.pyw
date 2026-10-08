@@ -5,13 +5,15 @@ import os
 import traceback
 from pathlib import Path
 
+from nailong_pet import APP_NAME
+
 
 PROJECT_DIR = Path(__file__).resolve().parent
 ERROR_LOG = PROJECT_DIR / "desktop_pet_error.log"
 
 
 def show_error(message: str) -> None:
-    ctypes.windll.user32.MessageBoxW(0, message, "奶龙桌宠启动失败", 0x10)
+    ctypes.windll.user32.MessageBoxW(0, message, f"{APP_NAME}启动失败", 0x10)
 
 
 try:

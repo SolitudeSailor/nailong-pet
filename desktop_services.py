@@ -11,6 +11,8 @@ import subprocess
 import sys
 import threading
 
+from nailong_pet import APP_NAME
+
 PROJECT = Path(__file__).resolve().parent
 IS_COMPILED = '__compiled__' in globals() or bool(getattr(sys, 'frozen', False))
 DATA_ROOT = (Path(os.environ['LOCALAPPDATA']) / 'nailong'
@@ -175,7 +177,7 @@ def start_tray(image, events: queue.Queue):
     import pystray
     def send(action):
         return lambda _icon, _item: events.put((action, None))
-    icon = pystray.Icon('nailong', image, '奶龙桌宠', pystray.Menu(
+    icon = pystray.Icon('nailong', image, APP_NAME, pystray.Menu(
         pystray.MenuItem('显示桌宠', send('show'), default=True),
         pystray.MenuItem('隐藏桌宠', send('hide')),
         pystray.MenuItem('播放大笑', send('play')),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable, Sequence
 import queue
 import random
 import sys
@@ -13,12 +14,19 @@ import cv2
 from PIL import Image, ImageTk
 from desktop_services import (Audio, autostart_enabled, load_settings, monitors,
                               place_in_monitor, save_settings, set_autostart, start_tray)
-
-
-DEFAULT_VIDEO = "奶龙大笑_video.mp4"
-TRANSPARENT_COLOR = "#ff00ff"
-SIDE_EYE_SECONDS = 1.7
-FULL_ANIMATION_SECONDS = 8
+from nailong_pet import (
+    APP_NAME,
+    DEFAULT_VIDEO,
+    FULL_ANIMATION_SECONDS,
+    SIDE_EYE_SECONDS,
+    TRANSPARENT_COLOR,
+)
+from nailong_pet.imaging import (
+    remove_connected_background,
+    resize_transparent_image,
+    to_colorkey_image,
+)
+from nailong_pet.settings import MAX_DISPLAY_WIDTH, MIN_DISPLAY_WIDTH, PetSettings
 
 
 class DesktopPet:
@@ -37,19 +45,22 @@ class DesktopPet:
         self.target_width = width
         self.display_width = display_width or width
         self.chroma_tolerance = chroma_tolerance
-        self.settings = load_settings()
-        self.display_width = max(60, min(720, int(self.settings.get('width', self.display_width))))
+        self.settings = PetSettings.from_mapping(
+            load_settings(),
+            default_width=self.display_width,
+        )
+        self.display_width = self.settings.width
         self.events = queue.Queue()
         self.closed = False
         self.hidden = False
         self.last_activity = time.monotonic()
         self.resize_mode = False
         self.save_job = None
-        self.sound_enabled = tk.BooleanVar(root, bool(self.settings.get('sound', True)))
-        self.idle_enabled = tk.BooleanVar(root, bool(self.settings.get('idle', False)))
-        self.snap_enabled = tk.BooleanVar(root, bool(self.settings.get('snap', True)))
+        self.sound_enabled = tk.BooleanVar(root, self.settings.sound)
+        self.idle_enabled = tk.BooleanVar(root, self.settings.idle)
+        self.snap_enabled = tk.BooleanVar(root, self.settings.snap)
         self.autostart = tk.BooleanVar(root, autostart_enabled())
-        self.volume = max(0, min(100, int(self.settings.get('volume', 70))))
+        self.volume = self.settings.volume
 
         self.capture: cv2.VideoCapture | None = None
         self.first_frame: ImageTk.PhotoImage | None = None
@@ -81,7 +92,7 @@ class DesktopPet:
         self.root.protocol('WM_DELETE_WINDOW', self.close)
 
     def _configure_window(self) -> None:
-        self.root.title("奶龙桌宠")
+        self.root.title(APP_NAME)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.configure(bg=TRANSPARENT_COLOR)
@@ -125,78 +136,14 @@ class DesktopPet:
 
     @staticmethod
     def _resize_transparent_image(image: Image.Image, size: tuple[int, int]) -> Image.Image:
-        """以预乘 Alpha 缩放，再将透明度二值化。
-
-        Windows 的 transparentcolor 是颜色键透明，半透明边缘会与洋红色
-        背景混合成紫边。预乘可防止透明区的白色污染边缘，二值化
-        则保证不产生洋红色混合像素。
-        """
-        import numpy as np
-
-        pixels = np.asarray(image, dtype=np.float32)
-        alpha = pixels[:, :, 3] / 255.0
-        premultiplied = pixels[:, :, :3] * alpha[:, :, None]
-
-        resized_alpha = cv2.resize(alpha, size, interpolation=cv2.INTER_AREA)
-        resized_premultiplied = cv2.resize(
-            premultiplied, size, interpolation=cv2.INTER_AREA
-        )
-
-        safe_alpha = np.maximum(resized_alpha[:, :, None], 1e-6)
-        resized_rgb = np.clip(resized_premultiplied / safe_alpha, 0, 255)
-        binary_alpha = np.where(resized_alpha >= 0.5, 255, 0)
-        result = np.dstack((resized_rgb, binary_alpha)).astype(np.uint8)
-        return DesktopPet._to_colorkey_image(Image.fromarray(result))
+        return resize_transparent_image(image, size)
 
     @staticmethod
     def _to_colorkey_image(image: Image.Image) -> Image.Image:
-        """将 Alpha 透明区转为 Windows 窗口色键像素。
-
-        Tk 在动画重绘时不再需要 PhotoImage Alpha；纯 RGB 图像中的
-        #ff00ff 由 transparentcolor 统一处理，避免透明黑被短暂绘制。
-        """
-        import numpy as np
-
-        rgba = np.asarray(image.convert('RGBA'), dtype=np.uint8)
-        rgb = rgba[:, :, :3].copy()
-        transparent = rgba[:, :, 3] < 128
-        colorkey = np.array((255, 0, 255), dtype=np.uint8)
-        opaque_colorkey = ~transparent & np.all(rgb == colorkey, axis=2)
-        rgb[opaque_colorkey] = (254, 0, 255)
-        rgb[transparent] = colorkey
-        return Image.fromarray(rgb)
+        return to_colorkey_image(image)
 
     def _remove_corner_background(self, bgr):
-        """去除与画面边缘连通的白/灰低饱和背景。
-
-        只清除与画面边缘相连的区域，因此不会误删角色内部的白色肚皮和眼睛。
-        低饱和度判断可同时清理脚下灰白阴影。
-        """
-        import numpy as np
-
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        saturation = hsv[:, :, 1]
-        brightness = hsv[:, :, 2]
-        background_candidate = (
-            (saturation <= self.chroma_tolerance) & (brightness >= 35)
-        ).astype(np.uint8)
-
-        _, labels = cv2.connectedComponents(background_candidate, connectivity=8)
-        border_labels = np.unique(
-            np.concatenate((labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]))
-        )
-        connected_background = np.isin(labels, border_labels) & (background_candidate != 0)
-        # 脚部区域的压缩噪点可能将白色地面切成小孤岛，
-        # 在画面下 1/3 直接清除低饱和像素，不会触及肚皮和眼睛。
-        lower_region = np.zeros_like(background_candidate, dtype=bool)
-        lower_region[round(bgr.shape[0] * 0.67) :, :] = True
-        connected_background |= lower_region & (background_candidate != 0)
-        # H.264 在白色边界附近会产生少量带色压缩点，它们的
-        # 饱和度不再很低；以 RGB 最小通道补充判断可清掉脚下白点。
-        light_floor_noise = np.min(bgr, axis=2) >= 100
-        connected_background |= lower_region & light_floor_noise
-        alpha = np.where(connected_background, 0, 255).astype(np.uint8)
-        return np.dstack((bgr, alpha))
+        return remove_connected_background(bgr, self.chroma_tolerance)
 
     def _build_ui(self) -> None:
         assert self.first_frame is not None
@@ -247,9 +194,8 @@ class DesktopPet:
         height = self.root.winfo_reqheight()
         x = max(0, self.root.winfo_screenwidth() - width - 40)
         y = max(0, self.root.winfo_screenheight() - height - 80)
-        position = self.settings.get('position')
-        if isinstance(position, list) and len(position) == 2 and all(isinstance(v, int) for v in position):
-            x, y = position
+        if self.settings.position is not None:
+            x, y = self.settings.position
         self._set_position(*place_in_monitor(x, y, width, height))
 
     def _set_position(self, x, y):
@@ -367,10 +313,15 @@ class DesktopPet:
 
     def _save(self):
         self.save_job = None
-        save_settings({'width': self.display_width,
-                       'position': [self.root.winfo_x(), self.root.winfo_y()],
-                       'sound': self.sound_enabled.get(), 'volume': self.volume,
-                       'idle': self.idle_enabled.get(), 'snap': self.snap_enabled.get()})
+        settings = PetSettings(
+            width=self.display_width,
+            position=(self.root.winfo_x(), self.root.winfo_y()),
+            sound=self.sound_enabled.get(),
+            volume=self.volume,
+            idle=self.idle_enabled.get(),
+            snap=self.snap_enabled.get(),
+        )
+        save_settings(settings.to_mapping())
 
     def _option_changed(self):
         self.last_activity = time.monotonic()
@@ -522,20 +473,48 @@ class DesktopPet:
         self.root.destroy()
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="奶龙视频桌宠")
+def integer_in_range(
+    name: str,
+    minimum: int,
+    maximum: int,
+) -> Callable[[str], int]:
+    """创建带明确错误信息的 argparse 整数校验器。"""
+    def parse(value: str) -> int:
+        try:
+            number = int(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(f"{name} 必须是整数") from exc
+        if not minimum <= number <= maximum:
+            raise argparse.ArgumentTypeError(
+                f"{name} 必须在 {minimum}–{maximum} 之间"
+            )
+        return number
+
+    return parse
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=APP_NAME)
     parser.add_argument("--video", type=Path, default=Path(__file__).with_name(DEFAULT_VIDEO))
-    parser.add_argument("--width", type=int, default=720, help="内部渲染宽度（像素）")
     parser.add_argument(
-        "--display-width", type=int, default=180, help="桌面实际显示宽度（像素）"
+        "--width",
+        type=integer_in_range("内部渲染宽度", MIN_DISPLAY_WIDTH, 4096),
+        default=720,
+        help="内部渲染宽度（像素，60–4096）",
+    )
+    parser.add_argument(
+        "--display-width",
+        type=integer_in_range("桌面显示宽度", MIN_DISPLAY_WIDTH, MAX_DISPLAY_WIDTH),
+        default=180,
+        help="桌面实际显示宽度（像素，60–720）",
     )
     parser.add_argument(
         "--chroma-tolerance",
-        type=int,
+        type=integer_in_range("背景饱和度阈值", 0, 255),
         default=55,
-        help="背景最大饱和度，越大去除的灰白背景越多",
+        help="背景最大饱和度（0–255），越大去除的灰白背景越多",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main() -> None:
@@ -551,7 +530,7 @@ def main() -> None:
         )
     except Exception as exc:
         root.withdraw()
-        messagebox.showerror("奶龙桌宠启动失败", str(exc))
+        messagebox.showerror(f"{APP_NAME}启动失败", str(exc))
         root.destroy()
         raise SystemExit(1) from exc
     root.mainloop()

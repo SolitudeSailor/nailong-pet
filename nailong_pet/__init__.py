@@ -1,0 +1,17 @@
+"""奶龙桌宠的可复用核心模块。"""
+
+APP_NAME = "奶龙桌宠"
+APP_VERSION = "1.0.0"
+DEFAULT_VIDEO = "奶龙大笑_video.mp4"
+TRANSPARENT_COLOR = "#ff00ff"
+SIDE_EYE_SECONDS = 1.7
+FULL_ANIMATION_SECONDS = 8.0
+
+__all__ = [
+    "APP_NAME",
+    "APP_VERSION",
+    "DEFAULT_VIDEO",
+    "FULL_ANIMATION_SECONDS",
+    "SIDE_EYE_SECONDS",
+    "TRANSPARENT_COLOR",
+]

@@ -7,3 +7,10 @@ settings.tmp
 .cache/
 build/
 installer/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
